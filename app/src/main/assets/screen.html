@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d191c">
+<title>Camera Radar</title>
+<style>
+:root{
+  --bg:#0d191c; --panel:#13252a; --ink:#d9e7e4; --muted:#8aa5a2; --line:#24413f; --accent:#ffb547; --on-accent:#1b1000;
+  --scope:#071417;
+  color-scheme:dark;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+*,*::before,*::after{box-sizing:inherit}
+html,body{min-height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:"Roboto Condensed","Arial Narrow",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-tap-highlight-color:transparent}
+main{max-width:760px;margin:0 auto;padding:12px;display:flex;flex-direction:column;gap:12px}
+header{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:4px 4px 0}
+h1{font-size:1.35rem;margin:0;font-weight:700}
+h2{font-size:1.05rem;margin:0 0 6px}
+#status{color:var(--muted);font-size:.95rem;text-align:right}
+button{font:inherit;font-weight:600;font-size:.95rem;padding:10px 12px;border-radius:9px;border:1px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer}
+button[aria-pressed="true"]{border-color:var(--accent);color:var(--accent);background:var(--panel)}
+button:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}
+.stage{position:relative}
+.scope-wrap{position:relative;width:min(100%,64vh);aspect-ratio:1;margin:0 auto;background:var(--scope);border-radius:50%}
+#scope{position:absolute;inset:0;width:100%;height:100%;display:block}
+.count{position:absolute;left:4px;top:0;line-height:1.05}
+.count b{display:block;font-size:2.2rem;font-weight:700}
+.count span{font-size:.85rem;color:var(--muted)}
+.legend{position:absolute;right:0;top:0;font-size:.85rem;color:var(--muted);display:grid;gap:1px;text-align:right}
+.legend i,.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--c);margin-left:6px;vertical-align:middle}
+.dot{margin:0 6px 0 0;flex:none}
+.banner{position:absolute;left:50%;top:42%;transform:translate(-50%,-50%);background:rgba(7,20,23,.92);color:#fff;border:2px solid var(--c,#ffb547);border-radius:12px;padding:8px 14px;font-weight:700;font-size:1.1rem;white-space:nowrap;opacity:0;transition:opacity .25s;pointer-events:none}
+.banner.show{opacity:1}
+.peeks{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.peeks[hidden]{display:none}
+.peeks figure{margin:0;background:#000;border-radius:10px;overflow:hidden;position:relative;aspect-ratio:3/4}
+.peeks img{width:100%;height:100%;object-fit:contain;display:block}
+.peeks figcaption{position:absolute;left:8px;bottom:6px;color:#fff;font-size:.85rem;text-shadow:0 1px 3px #000}
+.controls{display:grid;gap:10px}
+.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{border:0;border-radius:0;flex:1;background:transparent}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent)}
+.toggles{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+@media (max-width:460px){.toggles{grid-template-columns:1fr 1fr}}
+.sens{display:flex;flex-direction:column;font-size:.85rem;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--accent)}
+ul.list{margin:0;padding:0;list-style:none;font-size:.95rem}
+ul.list li{display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--line)}
+ul.list li:last-child{border-bottom:0}
+ul.list strong{min-width:5.5em}
+ul.list time{margin-left:auto;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.muted{color:var(--muted)}
+</style>
+</head>
+<body>
+<main>
+  <header><h1>Camera Radar</h1><div id="status" role="status">Connecting…</div></header>
+
+  <div class="stage">
+    <div class="scope-wrap" id="wrap">
+      <canvas id="scope" aria-label="Radar showing what the radar phone’s cameras detect around it"></canvas>
+      <div class="banner" id="banner"></div>
+    </div>
+    <div class="count"><b id="count">0</b><span>contacts</span></div>
+    <div class="legend" aria-hidden="true">
+      <span>Person<i style="--c:#ffb547"></i></span>
+      <span>Animal<i style="--c:#7ee08a"></i></span>
+      <span>Vehicle<i style="--c:#6cc7ff"></i></span>
+      <span>Motion<i style="--c:#c9d6d3"></i></span>
+    </div>
+  </div>
+
+  <div class="peeks" id="peeks" hidden>
+    <figure><img id="peekRear" alt="Latest rear camera view"><figcaption>Rear camera (ahead)</figcaption></figure>
+    <figure><img id="peekFront" alt="Latest front camera view"><figcaption>Front camera (behind)</figcaption></figure>
+  </div>
+
+  <div class="panel controls">
+    <div class="seg" role="group" aria-label="Cameras to use">
+      <button data-cams="both" aria-pressed="true">Both cameras</button>
+      <button data-cams="rear" aria-pressed="false">Rear only</button>
+      <button data-cams="front" aria-pressed="false">Front only</button>
+    </div>
+    <div class="toggles">
+      <button id="tgMoving" aria-pressed="true">Moving only</button>
+      <button id="tgSound" aria-pressed="false">Sound</button>
+      <button id="tgPeek" aria-pressed="false">Camera peek</button>
+      <button id="tgPause" aria-pressed="false">Pause</button>
+    </div>
+    <label class="sens">Motion sensitivity
+      <input type="range" id="sensIn" min="0" max="1" step="0.01" value="0.55">
+    </label>
+  </div>
+
+  <div class="panel">
+    <h2>Contacts now</h2>
+    <ul class="list" id="contactList"><li class="muted">Nothing detected</li></ul>
+  </div>
+  <div class="panel">
+    <h2>Detection log</h2>
+    <ul class="list" id="log"><li class="muted">No detections yet</li></ul>
+  </div>
+</main>
+
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const COLORS = { person:'#ffb547', animal:'#7ee08a', vehicle:'#6cc7ff', motion:'#c9d6d3' };
+const rad = d => d * Math.PI / 180;
+const angNorm = a => ((a % 360) + 540) % 360 - 180;
+const cap = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+function dirText(b){
+  b = angNorm(b); const a = Math.abs(b); const side = b < 0 ? 'left' : 'right';
+  if (a < 6) return 'straight ahead';
+  if (a > 174) return 'directly behind';
+  if (a <= 90) return `${Math.round(a)}° ${side}`;
+  return `behind, ${Math.round(180 - a)}° ${side}`;
+}
+const rangeText = r => r < 1/3 ? 'near' : r < 2/3 ? 'mid' : 'far';
+const nameOf = c => c.type === 'motion' ? 'Motion' : cap(c.label || c.type);
+
+const S = {
+  ws:null, linked:false, contacts:[], blips:[], sweep:0, status:null, lastFrame:0,
+  logged:new Set(), firstSeen:new Map(), gotSettings:false,
+  settings:{ sens:0.55, movingOnly:true, cams:'both', peek:false, paused:false },
+  soundOn:false, audio:null, bannerTimer:null, cw:0, ch:0, dpr:1, lastT:0
+};
+function setScr(t){ $('status').textContent = t; }
+
+/* ---------- link to the radar phone ---------- */
+function connect(){
+  let ws;
+  try { ws = new WebSocket(`ws://${location.host}/ws`); } catch(e){ setTimeout(connect, 2000); return; }
+  S.ws = ws;
+  ws.onopen = () => { S.linked = true; S.lastFrame = performance.now(); };
+  ws.onmessage = e => { try { onMsg(JSON.parse(e.data)); } catch(err){} };
+  ws.onclose = () => { if (S.ws !== ws) return; S.linked = false; setScr('Link lost, reconnecting…'); setTimeout(connect, 2000); };
+  ws.onerror = () => { try { ws.close(); } catch(e){} };
+}
+function sendSettings(){
+  if (S.ws && S.ws.readyState === 1) try { S.ws.send(JSON.stringify({ t:'settings', ...S.settings })); } catch(e){}
+}
+function applyControls(){
+  document.querySelectorAll('[data-cams]').forEach(x => x.setAttribute('aria-pressed', x.dataset.cams === S.settings.cams));
+  $('tgMoving').setAttribute('aria-pressed', S.settings.movingOnly);
+  $('tgPeek').setAttribute('aria-pressed', S.settings.peek);
+  $('tgPause').setAttribute('aria-pressed', S.settings.paused);
+  $('tgPause').textContent = S.settings.paused ? 'Resume' : 'Pause';
+  $('peeks').hidden = !S.settings.peek;
+  $('sensIn').value = S.settings.sens;
+}
+function onMsg(m){
+  if (!m) return;
+  if (m.t === 'hello' || m.t === 'frame'){ S.status = m.status; S.lastFrame = performance.now(); }
+  if (m.t === 'hello' && m.settings){
+    // the radar phone keeps the settings, so a second screen sees the same ones
+    Object.assign(S.settings, m.settings); applyControls();
+  }
+  if (m.t === 'frame'){
+    S.contacts = m.contacts || [];
+    const now = performance.now(), ids = new Set();
+    for (const c of S.contacts){
+      ids.add(c.id);
+      if (!S.firstSeen.has(c.id)) S.firstSeen.set(c.id, now);
+      if (!c.moving) continue;
+      const key = c.id + ':' + c.type;
+      if (S.logged.has(key)) continue;
+      if (c.type === 'motion'){
+        if (now - S.firstSeen.get(c.id) < 1200 || S.logged.has(c.id + ':labeled')) continue;
+      } else S.logged.add(c.id + ':labeled');
+      S.logged.add(key); addEvent(c);
+    }
+    for (const [id, t] of S.firstSeen) if (!ids.has(id) && now - t > 60000) S.firstSeen.delete(id);
+  }
+  if (m.t === 'snap') $(m.cam === 'rear' ? 'peekRear' : 'peekFront').src = m.data;
+}
+
+/* ---------- controls ---------- */
+document.querySelectorAll('[data-cams]').forEach(b => b.onclick = () => { S.settings.cams = b.dataset.cams; applyControls(); sendSettings(); });
+function toggle(id, fn){ $(id).onclick = () => { const v = $(id).getAttribute('aria-pressed') !== 'true'; $(id).setAttribute('aria-pressed', v); fn(v); }; }
+toggle('tgMoving', v => { S.settings.movingOnly = v; sendSettings(); });
+toggle('tgPeek', v => { S.settings.peek = v; $('peeks').hidden = !v; sendSettings(); });
+toggle('tgPause', v => { S.settings.paused = v; $('tgPause').textContent = v ? 'Resume' : 'Pause'; sendSettings(); });
+toggle('tgSound', v => {
+  S.soundOn = v;
+  if (v){ try { S.audio = S.audio || new (window.AudioContext || window.webkitAudioContext)(); S.audio.resume(); } catch(e){} }
+});
+$('sensIn').addEventListener('change', e => { S.settings.sens = parseFloat(e.target.value); sendSettings(); });
+
+/* ---------- alerts ---------- */
+function addEvent(c){
+  const name = nameOf(c), where = dirText(c.b);
+  const when = new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  const log = $('log');
+  if (log.firstElementChild && log.firstElementChild.classList.contains('muted')) log.innerHTML = '';
+  const li = document.createElement('li');
+  li.innerHTML = `<span class="dot" style="--c:${COLORS[c.type]}"></span><strong></strong><span></span><time>${when}</time>`;
+  li.children[1].textContent = name;
+  li.children[2].textContent = `${where}, ${rangeText(c.r)}`;
+  log.prepend(li);
+  while (log.children.length > 40) log.lastElementChild.remove();
+  const ban = $('banner');
+  ban.textContent = `${name}: ${where}`; ban.style.setProperty('--c', COLORS[c.type]);
+  ban.classList.add('show'); clearTimeout(S.bannerTimer);
+  S.bannerTimer = setTimeout(() => ban.classList.remove('show'), 2500);
+  alertSound(c.type);
+  if (c.type !== 'motion' && navigator.vibrate) try { navigator.vibrate([80, 60, 80]); } catch(e){}
+}
+function tone(freq, start, dur, vol){
+  const a = S.audio, o = a.createOscillator(), g = a.createGain();
+  o.frequency.value = freq; o.type = 'sine';
+  g.gain.setValueAtTime(0.0001, a.currentTime + start);
+  g.gain.exponentialRampToValueAtTime(vol, a.currentTime + start + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, a.currentTime + start + dur);
+  o.connect(g).connect(a.destination); o.start(a.currentTime + start); o.stop(a.currentTime + start + dur + 0.05);
+}
+function alertSound(type){
+  if (!S.soundOn || !S.audio) return;
+  try {
+    const seq = { person:[[880,0],[660,.16]], animal:[[520,0],[780,.16]], vehicle:[[392,0],[392,.18]], motion:[[700,0]] }[type] || [[700,0]];
+    seq.forEach(([f, s]) => tone(f, s, 0.14, type === 'motion' ? 0.08 : 0.2));
+  } catch(e){}
+}
+function blipPing(r){
+  if (!S.soundOn || !S.audio) return;
+  try { tone(600 + (1 - r) * 900, 0, 0.12, 0.05); } catch(e){}
+}
+
+/* ---------- lists & status ---------- */
+function updateLists(){
+  $('count').textContent = S.contacts.length;
+  const ul = $('contactList');
+  if (!S.contacts.length){ ul.innerHTML = '<li class="muted">Nothing detected</li>'; return; }
+  ul.innerHTML = '';
+  [...S.contacts].sort((a, b) => a.r - b.r).slice(0, 6).forEach(c => {
+    const li = document.createElement('li');
+    const trend = c.trend < -0.004 ? 'coming closer' : c.trend > 0.004 ? 'moving away' : (c.moving ? 'moving' : 'still');
+    li.innerHTML = `<span class="dot" style="--c:${COLORS[c.type]}"></span><strong></strong><span></span><time></time>`;
+    li.children[1].textContent = nameOf(c);
+    li.children[2].textContent = `${dirText(c.b)}, ${rangeText(c.r)}`;
+    li.children[3].textContent = trend;
+    ul.appendChild(li);
+  });
+}
+setInterval(updateLists, 300);
+function statusLine(){
+  if (!S.linked) return null;
+  const st = S.status, now = performance.now();
+  if (now - S.lastFrame > 3000) return 'No data. Keep Camera Radar open on the radar phone.';
+  if (!st || !st.started) return 'Linked. Waiting for the radar phone’s cameras.';
+  if (st.paused) return 'Paused';
+  if (st.shaky && (st.shaky.rear || st.shaky.front)) return 'Radar phone is moving. Hold it still.';
+  const m = { dual:'Both cameras live', alternate:'Cameras taking turns', single:'One camera live', none:'Cameras off' }[st.mode] || 'Linked';
+  return m + (st.model === 'loading' ? ', AI loading' : st.model === 'failed' ? ', motion only' : '');
+}
+
+/* ---------- scope ---------- */
+function resizeScope(){
+  const r = $('scope').getBoundingClientRect();
+  S.dpr = Math.min(2, window.devicePixelRatio || 1);
+  S.cw = r.width; S.ch = r.height;
+  $('scope').width = Math.round(S.cw * S.dpr); $('scope').height = Math.round(S.ch * S.dpr);
+}
+if (window.ResizeObserver) new ResizeObserver(resizeScope).observe($('wrap'));
+else { window.addEventListener('resize', resizeScope); resizeScope(); }
+
+function loop(t){
+  const dt = Math.min(0.1, (t - (S.lastT || t)) / 1000); S.lastT = t;
+  const line = statusLine(); if (line) setScr(line);
+  if (S.linked && t - S.lastFrame > 5000) S.contacts = [];
+  const prev = S.sweep, step = 120 * dt;      // one full turn every 3 seconds
+  S.sweep = (S.sweep + step) % 360;
+  for (const c of S.contacts){
+    const d = ((c.b - prev) % 360 + 360) % 360;
+    if (d <= step + 0.5){
+      S.blips = S.blips.filter(b => b.id !== c.id);
+      S.blips.push({ id:c.id, b:c.b, r:c.r, s:c.s, type:c.type, label:c.label, moving:c.moving, glow:1 });
+      blipPing(c.r);
+    }
+  }
+  for (const b of S.blips) b.glow -= dt * 0.33;
+  S.blips = S.blips.filter(b => b.glow > 0);
+  if (S.cw) draw();
+  requestAnimationFrame(loop);
+}
+function draw(){
+  const ctx = $('scope').getContext('2d');
+  const { cw, ch, dpr } = S;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cw, ch);
+  const cx = cw / 2, cy = ch / 2, R0 = Math.min(cw, ch) / 2 - 28;
+  const pt = (b, r) => [cx + Math.sin(rad(b)) * r * R0, cy - Math.cos(rad(b)) * r * R0];
+  const wedge = (from, to, r) => { ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, r, rad(from - 90), rad(to - 90)); ctx.closePath(); };
+
+  ctx.beginPath(); ctx.arc(cx, cy, R0, 0, Math.PI * 2); ctx.fillStyle = '#081619'; ctx.fill();
+
+  const st = S.status, live = (st && st.active) || [];
+  for (const cam of ['rear','front']){
+    const shown = st && (live.includes(cam) || st.mode === 'alternate');
+    if (!shown) continue;
+    const c0 = cam === 'rear' ? 0 : 180, half = ((st.fov && st.fov[cam]) || 50) / 2;
+    wedge(c0 - half, c0 + half, R0);
+    ctx.fillStyle = live.includes(cam) ? '#123539' : '#0d2629'; ctx.fill();
+    ctx.setLineDash(live.includes(cam) ? [] : [5, 5]);
+    ctx.strokeStyle = '#2f6662'; ctx.lineWidth = 1; ctx.stroke(); ctx.setLineDash([]);
+  }
+
+  for (let i = 0; i < 28; i++){
+    wedge(S.sweep - i - 1, S.sweep - i, R0);
+    ctx.fillStyle = `rgba(255,181,71,${0.11 * (1 - i / 28)})`; ctx.fill();
+  }
+
+  ctx.strokeStyle = '#24484a'; ctx.lineWidth = 1;
+  for (const r of [1/3, 2/3, 1]){ ctx.beginPath(); ctx.arc(cx, cy, r * R0, 0, Math.PI * 2); ctx.stroke(); }
+  for (let b = 0; b < 360; b += 45){ const [x, y] = pt(b, 1); ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(x, y); ctx.stroke(); }
+  ctx.fillStyle = '#6f9d98'; ctx.font = '600 12px system-ui, sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  [['Ahead',0],['Right',90],['Behind',180],['Left',270]].forEach(([t, b]) => { const [x, y] = pt(b, 1.09); ctx.fillText(t, x, y); });
+  ctx.fillStyle = '#4c7a76';
+  [['near',1/3],['mid',2/3],['far',1]].forEach(([t, r]) => { const [x, y] = pt(135, r); ctx.fillText(t, x + 12, y - 6); });
+
+  const [bx, by] = pt(S.sweep, 1);
+  ctx.strokeStyle = 'rgba(255,200,120,.9)'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(bx, by); ctx.stroke();
+
+  for (const b of S.blips){
+    const [x, y] = pt(b.b, b.r), col = COLORS[b.type] || '#fff';
+    const size = 6 + Math.min(20, Math.sqrt(b.s) * 60);
+    ctx.globalAlpha = Math.max(0, b.glow);
+    if (b.moving){
+      const grd = ctx.createRadialGradient(x, y, 0, x, y, size * 1.8);
+      grd.addColorStop(0, '#ffffff'); grd.addColorStop(0.3, col); grd.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(x, y, size * 1.8, 0, Math.PI * 2); ctx.fill();
+    } else {
+      ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, size * 0.7, 0, Math.PI * 2); ctx.stroke();
+    }
+    ctx.fillStyle = col; ctx.font = '600 12px system-ui, sans-serif';
+    ctx.fillText(nameOf(b), x, y - size - 8);
+    ctx.globalAlpha = 1;
+  }
+
+  // the radar phone in the middle; its top edge faces "Ahead"
+  ctx.fillStyle = '#ffb547';
+  ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(cx - 6, cy - 10, 12, 20, 3); else ctx.rect(cx - 6, cy - 10, 12, 20); ctx.fill();
+  ctx.fillStyle = '#081619'; ctx.fillRect(cx - 3, cy - 8, 6, 2);
+}
+
+requestAnimationFrame(loop);
+connect();
+})();
+</script>
+</body>
+</html>

@@ -1,10 +1,12 @@
 # Camera Radar
 
-Two-phone motion radar that runs in the browser.
+Two-phone motion radar.
 
-- **Radar phone**: uses the rear camera (looks ahead) and front camera (looks behind), detects motion and recognises people, animals and vehicles with an on-device AI model (COCO-SSD).
-- **Screen phone**: shows a 360° radar, alerts, a contact list and a detection log, and controls the radar phone.
+## Android app (APK) – works with no internet
+- **Radar phone**: turns on its hotspot, uses the rear camera (ahead) and front camera (behind), spots motion and recognises people, animals and vehicles on the phone itself.
+- **Screen phone**: joins the radar phone's hotspot and shows a 360° radar, alerts, contacts and a detection log. It can also be any phone's browser: open the address shown on the radar phone.
 
-The phones pair with a 6-digit code (or QR code) and talk over WebRTC, so data goes directly across the hotspot.
+Every push to `main` builds the APK with GitHub Actions. Download it from **Releases** (or the Actions run's artifacts).
 
-Open `index.html` over HTTPS (GitHub Pages works). The radar phone needs mobile data on for its hotspot, since pairing and the AI model download go through the internet.
+## Web version
+`index.html` is the browser version (needs internet for pairing), served by GitHub Pages.
