@@ -53,7 +53,7 @@ class ScreenActivity : ComponentActivity() {
                     if (request.isForMainFrame) showError()
                 }
                 override fun onPageFinished(view: WebView, url: String) {
-                    if (!failed) overlay.visibility = View.GONE
+   if (!failed) this@ScreenActivity.overlay.visibility = View.GONE
                 }
             }
         }
