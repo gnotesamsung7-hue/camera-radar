@@ -1,0 +1,903 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#071417">
+<title>Camera Radar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Saira+Semi+Condensed:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+:root{
+  --bg:#e6ecea; --panel:#f5f8f7; --ink:#12302f; --muted:#4f6a68; --line:#c3d1ce; --accent:#b8650a; --on-accent:#1b1000;
+  --scope:#071417;
+  color-scheme:light;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){--bg:#0d191c;--panel:#13252a;--ink:#d9e7e4;--muted:#8aa5a2;--line:#24413f;--accent:#ffb547;--on-accent:#1b1000;color-scheme:dark}
+}
+:root[data-theme="dark"]{--bg:#0d191c;--panel:#13252a;--ink:#d9e7e4;--muted:#8aa5a2;--line:#24413f;--accent:#ffb547;--on-accent:#1b1000;color-scheme:dark}
+*,*::before,*::after{box-sizing:inherit}
+html,body{min-height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:"Saira Semi Condensed",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-tap-highlight-color:transparent}
+.view[hidden]{display:none!important}
+.view{max-width:760px;margin:0 auto;padding:12px;display:flex;flex-direction:column;gap:12px}
+header{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:4px 4px 0}
+h1{font-size:1.35rem;margin:0;font-weight:700}
+.status{color:var(--muted);font-size:.95rem;text-align:right}
+p{margin:0;line-height:1.5}
+.muted{color:var(--muted)}
+.err{color:#c4410c}
+@media (prefers-color-scheme:dark){.err{color:#ffb08a}}
+button{font:inherit;font-weight:600;font-size:.95rem;padding:9px 12px;border-radius:9px;border:1px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer}
+button.primary{background:var(--accent);color:var(--on-accent);border-color:transparent;font-size:1.05rem;padding:12px 20px}
+button[aria-pressed="true"]{border-color:var(--accent);color:var(--accent);background:var(--panel)}
+button:disabled{opacity:.55;cursor:default}
+button:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}
+
+/* pick */
+#pick{min-height:100vh;justify-content:center;max-width:520px;padding:24px}
+#pick h1{font-size:2.6rem;line-height:1}
+.role{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;padding:18px;border-radius:14px;font-size:1.3rem;background:var(--panel)}
+.role small{font-weight:400;color:var(--muted);font-size:1rem}
+
+/* radar phone */
+.pair{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.code{font-size:2.8rem;font-weight:700;letter-spacing:.06em;font-variant-numeric:tabular-nums;line-height:1}
+#qr{background:#fff;padding:8px;border-radius:8px;line-height:0}
+#qr img,#qr canvas{display:block;width:150px;height:150px}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tile{position:relative;aspect-ratio:3/4;background:#000;border-radius:10px;overflow:hidden;border:1px solid var(--line)}
+.tile video,.tile canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+.tile .tag{position:absolute;left:8px;bottom:6px;right:8px;color:#fff;font-size:.9rem;text-shadow:0 1px 3px #000}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.dim{position:fixed;inset:0;background:#000;color:#3d4a4a;display:flex;align-items:center;justify-content:center;z-index:50;font-size:1rem}
+.dim[hidden]{display:none}
+
+/* screen phone */
+.scope-wrap{position:relative;width:min(100%,68vh);aspect-ratio:1;margin:0 auto;background:var(--scope);border-radius:50%}
+#scope{position:absolute;inset:0;width:100%;height:100%;display:block}
+.count{position:absolute;left:4px;top:0;color:var(--ink);line-height:1.05}
+.count b{display:block;font-size:2.2rem;font-weight:700}
+.count span{font-size:.85rem;color:var(--muted)}
+.legend{position:absolute;right:0;top:0;font-size:.85rem;color:var(--muted);display:grid;gap:1px;text-align:right}
+.legend i,.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--c);margin-left:6px;vertical-align:middle}
+.dot{margin:0 6px 0 0}
+.banner{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);background:rgba(7,20,23,.9);color:#fff;border:2px solid var(--c,#ffb547);border-radius:12px;padding:8px 14px;font-weight:700;font-size:1.1rem;white-space:nowrap;opacity:0;transition:opacity .25s;pointer-events:none}
+.banner.show{opacity:1}
+.peeks{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.peeks[hidden]{display:none}
+.peeks figure{margin:0;background:#000;border-radius:10px;overflow:hidden;position:relative;aspect-ratio:3/4}
+.peeks img{width:100%;height:100%;object-fit:contain;display:block}
+.peeks figcaption{position:absolute;left:8px;bottom:6px;color:#fff;font-size:.85rem;text-shadow:0 1px 3px #000}
+.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{border:0;border-radius:0;flex:1;background:transparent}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent)}
+.controls{display:grid;gap:10px}
+.toggles{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+@media (max-width:460px){.toggles{grid-template-columns:1fr 1fr}}
+.sens{display:flex;flex-direction:column;font-size:.85rem;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.join{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.join input{font:inherit;font-size:1.6rem;font-weight:700;letter-spacing:.12em;width:9ch;padding:6px 10px;border-radius:9px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-variant-numeric:tabular-nums}
+ul.list{margin:0;padding:0;list-style:none;font-size:.95rem}
+ul.list li{display:flex;align-items:center;gap:10px;padding:4px 0;border-bottom:1px solid var(--line)}
+ul.list li:last-child{border-bottom:0}
+ul.list strong{min-width:5.5em}
+ul.list time{margin-left:auto;color:var(--muted);font-variant-numeric:tabular-nums}
+h2{font-size:1.05rem;margin:0 0 6px}
+.linkbtn{background:none;border:0;padding:0;color:var(--accent);text-decoration:underline;font-weight:600}
+</style>
+</head>
+<body>
+
+<!-- ============ choose role ============ -->
+<section id="pick" class="view" hidden>
+  <h1>Camera Radar</h1>
+  <p class="muted">Uses two phones. One watches with both its cameras, the other shows the radar. Turn on the hotspot on the radar phone and connect the screen phone to it first.</p>
+  <button class="role" id="pickRadar">This phone is the radar<small>Uses the rear and front cameras. Stand it up somewhere still.</small></button>
+  <button class="role" id="pickScreen">This phone is the screen<small>Shows the radar, alerts and what was detected.</small></button>
+</section>
+
+<!-- ============ radar phone ============ -->
+<section id="radarView" class="view" hidden>
+  <header><h1>Radar phone</h1><div class="status" id="radLink">Starting…</div></header>
+  <div class="panel pair">
+    <div>
+      <p class="muted">Pairing code</p>
+      <div class="code" id="code">------</div>
+      <p class="muted" style="max-width:26ch;margin-top:6px">On the screen phone, scan the QR code or open Camera Radar and enter this code.</p>
+    </div>
+    <div id="qr" aria-label="QR code that opens the screen phone view"></div>
+  </div>
+  <div class="row">
+    <button class="primary" id="radStart">Start cameras</button>
+    <button id="radDim">Dim screen</button>
+  </div>
+  <p class="err" id="radErr"></p>
+  <div class="tiles">
+    <div class="tile"><video id="vRear" playsinline muted></video><canvas id="oRear"></canvas><div class="tag" id="tRear">Rear camera: off</div></div>
+    <div class="tile"><video id="vFront" playsinline muted></video><canvas id="oFront"></canvas><div class="tag" id="tFront">Front camera: off</div></div>
+  </div>
+  <div class="panel">
+    <p id="radMode">Cameras off</p>
+    <p class="muted" id="radModel">AI recognition starts with the cameras.</p>
+    <p class="muted" id="radCount"></p>
+  </div>
+  <p class="muted">Keep this screen on and this page open. If the phone locks, the cameras stop.</p>
+</section>
+<div class="dim" id="dim" hidden>Radar running. Tap to wake.</div>
+
+<!-- ============ screen phone ============ -->
+<section id="screenView" class="view" hidden>
+  <header><h1>Camera Radar</h1><div class="status" id="scrStatus">Not linked</div></header>
+
+  <div class="panel" id="joinPanel">
+    <h2>Link to the radar phone</h2>
+    <div class="join">
+      <input id="codeIn" inputmode="numeric" maxlength="7" placeholder="000000" aria-label="Pairing code">
+      <button class="primary" id="joinBtn">Connect</button>
+    </div>
+    <p class="err" id="joinErr" style="margin-top:8px"></p>
+  </div>
+
+  <div style="position:relative">
+    <div class="scope-wrap" id="wrap">
+      <canvas id="scope" aria-label="Radar showing what both cameras detect around the radar phone"></canvas>
+      <div class="banner" id="banner"></div>
+    </div>
+    <div class="count"><b id="count">0</b><span>contacts</span></div>
+    <div class="legend" aria-hidden="true">
+      <span>Person<i style="--c:#ffb547"></i></span>
+      <span>Animal<i style="--c:#7ee08a"></i></span>
+      <span>Vehicle<i style="--c:#6cc7ff"></i></span>
+      <span>Motion<i style="--c:#c9d6d3"></i></span>
+    </div>
+  </div>
+
+  <div class="peeks" id="peeks" hidden>
+    <figure><img id="peekRear" alt="Latest rear camera view"><figcaption>Rear camera</figcaption></figure>
+    <figure><img id="peekFront" alt="Latest front camera view"><figcaption>Front camera</figcaption></figure>
+  </div>
+
+  <div class="panel controls">
+    <div class="seg" role="group" aria-label="Cameras to use">
+      <button data-cams="both" aria-pressed="true">Both cameras</button>
+      <button data-cams="rear" aria-pressed="false">Rear only</button>
+      <button data-cams="front" aria-pressed="false">Front only</button>
+    </div>
+    <div class="toggles">
+      <button id="tgMoving" aria-pressed="true">Moving only</button>
+      <button id="tgSound" aria-pressed="false">Sound</button>
+      <button id="tgPeek" aria-pressed="false">Camera peek</button>
+      <button id="tgPause" aria-pressed="false">Pause</button>
+    </div>
+    <label class="sens">Motion sensitivity
+      <input type="range" id="sensIn" min="0" max="1" step="0.01" value="0.55">
+    </label>
+    <button class="linkbtn" id="changeCode" style="justify-self:start">Change pairing code</button>
+  </div>
+
+  <div class="panel">
+    <h2>Contacts now</h2>
+    <ul class="list" id="contactList"><li class="muted">Nothing detected</li></ul>
+  </div>
+  <div class="panel">
+    <h2>Detection log</h2>
+    <ul class="list" id="log"><li class="muted">No detections yet</li></ul>
+  </div>
+</section>
+
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const W = 80, H = 60;
+const PREFIX = 'camradar-v1-';
+const TF_URL = 'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js';
+const COCO_URL = 'https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js';
+const ANIMALS = new Set(['bird','cat','dog','horse','sheep','cow','elephant','bear','zebra','giraffe']);
+const VEHICLES = new Set(['bicycle','car','motorcycle','airplane','bus','train','truck','boat']);
+const COLORS = { person:'#ffb547', animal:'#7ee08a', vehicle:'#6cc7ff', motion:'#c9d6d3' };
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+const angNorm = a => ((a % 360) + 540) % 360 - 180;           // -> [-180,180)
+const rad = d => d * Math.PI / 180;
+const cap = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+const fmtCode = c => String(c).replace(/(\d{3})(\d{3})/, '$1 $2');
+const store = {
+  get(k){ try { return localStorage.getItem(k); } catch(e){ return null; } },
+  set(k,v){ try { localStorage.setItem(k,v); } catch(e){} }
+};
+function classify(cls){
+  if (cls === 'person') return 'person';
+  if (ANIMALS.has(cls)) return 'animal';
+  if (VEHICLES.has(cls)) return 'vehicle';
+  return null;
+}
+function dirText(b){
+  b = angNorm(b); const a = Math.abs(b); const side = b < 0 ? 'left' : 'right';
+  if (a < 6) return 'straight ahead';
+  if (a > 174) return 'directly behind';
+  if (a <= 90) return `${Math.round(a)}° ${side}`;
+  return `behind, ${Math.round(180 - a)}° ${side}`;
+}
+const rangeText = r => r < 1/3 ? 'near' : r < 2/3 ? 'mid' : 'far';
+function nameOf(c){ return c.type === 'motion' ? 'Motion' : cap(c.label || c.type); }
+function show(view){ ['pick','radarView','screenView'].forEach(v => $(v).hidden = v !== view); }
+function loadScript(src){
+  return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
+}
+
+/* =====================================================================
+   RADAR PHONE
+   ===================================================================== */
+const R = {
+  started:false, streams:{}, videos:{}, cam:{}, active:[], mode:'none', current:null, switching:false,
+  settings:{ sens:0.55, movingOnly:true, cams:'both', peek:false, paused:false },
+  conns:[], peer:null, code:null, idRetries:0,
+  model:null, modelState:'off', dets:{rear:[],front:[]}, detTime:{rear:0,front:0}, detIdx:0,
+  contacts:[], nextId:0, wake:null, lastSend:0, lastSnap:0, fov:{rear:66,front:66}
+};
+const newCam = () => ({ bg:null, warm:0, blobs:[], shaky:false, stall:0, lastTime:-1 });
+
+function initRadar(){
+  show('radarView');
+  R.videos = { rear:$('vRear'), front:$('vFront') };
+  R.cam = { rear:newCam(), front:newCam() };
+  R.code = store.get('camradar-code') || newCode();
+  store.set('camradar-code', R.code);
+  startPeer();
+  $('radStart').onclick = startRadar;
+  $('radDim').onclick = () => { $('dim').hidden = false; };
+  $('dim').onclick = () => { $('dim').hidden = true; };
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && R.started) requestWake(); });
+}
+const newCode = () => String(Math.floor(100000 + Math.random() * 900000));
+
+/* ---- pairing ---- */
+function setLink(t){ $('radLink').textContent = t; }
+function updateLink(){
+  const n = R.conns.filter(c => c.open).length;
+  setLink(n ? (n === 1 ? 'Screen phone linked' : `${n} screens linked`) : 'Waiting for the screen phone');
+}
+function screenURL(){ return location.origin + location.pathname + '#screen=' + R.code; }
+function showCode(){
+  $('code').textContent = fmtCode(R.code);
+  const q = $('qr'); q.innerHTML = '';
+  if (window.QRCode) new QRCode(q, { text:screenURL(), width:168, height:168, colorDark:'#071417', colorLight:'#ffffff' });
+}
+function startPeer(){
+  if (typeof Peer === 'undefined'){ setLink('Pairing library didn’t load. Check this phone’s internet, then reload.'); return; }
+  if (R.peer){ try { R.peer.destroy(); } catch(e){} }
+  setLink('Connecting to pairing server…');
+  const peer = new Peer(PREFIX + R.code, { debug:0 });
+  R.peer = peer;
+  peer.on('open', () => { R.idRetries = 0; showCode(); updateLink(); });
+  peer.on('connection', conn => {
+    conn.on('open', () => { R.conns.push(conn); try { conn.send(helloMsg()); } catch(e){} updateLink(); });
+    conn.on('data', onCmd);
+    conn.on('close', () => { R.conns = R.conns.filter(c => c !== conn); updateLink(); });
+    conn.on('error', () => {});
+  });
+  peer.on('disconnected', () => setTimeout(() => { if (!peer.destroyed) try { peer.reconnect(); } catch(e){} }, 1500));
+  peer.on('error', e => {
+    if (e.type === 'unavailable-id'){
+      // the server may still remember this phone from a moment ago; retry the same code first
+      if (R.idRetries++ < 3){ setLink('Reclaiming pairing code…'); setTimeout(startPeer, 3000); }
+      else { R.code = newCode(); store.set('camradar-code', R.code); R.idRetries = 0; startPeer(); }
+    } else if (['network','server-error','socket-error','socket-closed','browser-incompatible'].includes(e.type)){
+      setLink('Can’t reach the pairing server. Turn on mobile data on this phone.');
+      setTimeout(() => { if (!R.conns.length) startPeer(); }, 5000);
+    }
+  });
+}
+function broadcast(msg){ R.conns.forEach(c => { if (c.open) try { c.send(msg); } catch(e){} }); }
+function statusObj(){
+  return { mode:R.mode, active:R.active.slice(), model:R.modelState, started:R.started, paused:R.settings.paused,
+           shaky:{ rear:R.cam.rear.shaky, front:R.cam.front.shaky }, fov:R.fov };
+}
+const helloMsg = () => ({ t:'hello', settings:R.settings, status:statusObj() });
+function onCmd(m){
+  if (!m || m.t !== 'settings') return;
+  const prevCams = R.settings.cams, wasPaused = R.settings.paused;
+  ['sens','movingOnly','cams','peek','paused'].forEach(k => { if (k in m) R.settings[k] = m[k]; });
+  if (R.started && R.settings.cams !== prevCams) startCameras();
+  if (wasPaused && !R.settings.paused) R.active.forEach(resetCam);
+  updateCamUI();
+}
+
+/* ---- cameras ---- */
+async function startRadar(){
+  $('radErr').textContent = '';
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    $('radErr').textContent = 'This browser can’t open the camera. Use Chrome on Android or Safari on iPhone.';
+    return;
+  }
+  $('radStart').disabled = true; $('radStart').textContent = 'Starting…';
+  await startCameras();
+  $('radStart').disabled = false; $('radStart').textContent = 'Restart cameras';
+  if (!R.active.length) return;
+  if (R.modelState === 'off') loadModel();
+  requestWake();
+  if (!R.started){
+    R.started = true;
+    setInterval(tick, 80);
+    setInterval(watchdog, 1000);
+    setInterval(alternateTick, 4000);
+  }
+  broadcast(helloMsg());
+}
+async function openCam(cam, allowLoose){
+  const fm = cam === 'rear' ? 'environment' : 'user';
+  const base = { width:{ideal:640}, height:{ideal:480}, frameRate:{ideal:15, max:24} };
+  try {
+    return await navigator.mediaDevices.getUserMedia({ audio:false, video:{ ...base, facingMode:{ exact:fm } } });
+  } catch(e){
+    if (allowLoose && (e.name === 'OverconstrainedError' || e.name === 'NotFoundError'))
+      return await navigator.mediaDevices.getUserMedia({ audio:false, video:{ ...base, facingMode:fm } });
+    throw e;
+  }
+}
+const devId = s => { try { return s.getVideoTracks()[0].getSettings().deviceId || ''; } catch(e){ return ''; } };
+async function attach(cam){
+  const v = R.videos[cam]; v.srcObject = R.streams[cam];
+  try { await v.play(); } catch(e){}
+}
+function stopStream(cam){
+  const s = R.streams[cam];
+  if (s) s.getTracks().forEach(t => t.stop());
+  delete R.streams[cam];
+  R.videos[cam].srcObject = null;
+}
+function stopAll(){ ['rear','front'].forEach(stopStream); }
+function resetCam(cam){ Object.assign(R.cam[cam], newCam()); }
+function errText(e){
+  const n = e && e.name;
+  if (n === 'NotAllowedError' || n === 'SecurityError') return 'Camera access is blocked. Allow the camera for this site in the browser’s site settings, then tap Start cameras.';
+  if (n === 'NotReadableError') return 'The camera is busy in another app. Close that app and tap Start cameras again.';
+  if (n === 'NotFoundError' || n === 'OverconstrainedError') return 'No usable camera was found.';
+  return 'The camera couldn’t start (' + (n || 'unknown error') + ').';
+}
+async function startCameras(){
+  stopAll(); R.active = []; R.mode = 'none'; R.current = null;
+  const want = R.settings.cams;
+  const order = want === 'both' ? ['rear','front'] : [want];
+  const opened = []; let lastErr = null;
+  for (const cam of order){
+    try {
+      const s = await openCam(cam, opened.length === 0);
+      if (opened.length && devId(s) && devId(s) === devId(R.streams[opened[0]])){
+        s.getTracks().forEach(t => t.stop()); throw Object.assign(new Error('same camera'), { name:'SameCamera' });
+      }
+      R.streams[cam] = s; await attach(cam); opened.push(cam);
+    } catch(e){ lastErr = e; }
+  }
+  if (!opened.length){ $('radErr').textContent = errText(lastErr); updateCamUI(); return; }
+  if (want === 'both' && opened.length === 1){ R.mode = 'alternate'; R.current = opened[0]; }
+  else R.mode = opened.length === 2 ? 'dual' : 'single';
+  R.active = opened.slice();
+  opened.forEach(resetCam);
+  updateCamUI(); broadcast(helloMsg());
+}
+// Most phones can't stream both cameras at once from a browser. Then the two take turns.
+async function alternateTick(){
+  if (R.mode !== 'alternate' || R.switching || R.settings.paused) return;
+  R.switching = true;
+  const prev = R.current, next = prev === 'rear' ? 'front' : 'rear';
+  stopStream(prev); R.active = [];
+  try {
+    R.streams[next] = await openCam(next, false); await attach(next); R.current = next;
+  } catch(e){
+    try { R.streams[prev] = await openCam(prev, true); await attach(prev); } catch(e2){}
+    R.mode = 'single'; R.current = prev;
+  }
+  R.active = [R.current]; resetCam(R.current);
+  R.switching = false; updateCamUI(); broadcast(helloMsg());
+}
+function watchdog(){
+  for (const cam of R.active){
+    const v = R.videos[cam], st = R.cam[cam];
+    if (v.currentTime === st.lastTime) st.stall++; else st.stall = 0;
+    st.lastTime = v.currentTime;
+  }
+  // some phones "open" both cameras but one stops delivering frames
+  if (R.mode === 'dual'){
+    const frozen = R.active.find(c => R.cam[c].stall >= 3);
+    if (frozen){
+      const keep = frozen === 'rear' ? 'front' : 'rear';
+      stopStream(frozen); R.mode = 'alternate'; R.current = keep; R.active = [keep];
+      updateCamUI(); broadcast(helloMsg());
+    }
+  }
+}
+function updateCamUI(){
+  for (const cam of ['rear','front']){
+    const live = R.active.includes(cam);
+    const waiting = R.mode === 'alternate' && !live;
+    $(cam === 'rear' ? 'tRear' : 'tFront').textContent =
+      `${cap(cam)} camera: ${R.settings.paused && live ? 'paused' : live ? 'live' : waiting ? 'waiting its turn' : 'off'}`;
+  }
+  const modeTxt = {
+    dual:'Both cameras are live.',
+    alternate:'This phone can’t run both cameras at once, so they take turns every 4 seconds.',
+    single:`Only the ${R.active[0] || R.current || ''} camera is running.`,
+    none:'Cameras off.'
+  }[R.mode];
+  $('radMode').textContent = modeTxt;
+}
+async function requestWake(){
+  try { if ('wakeLock' in navigator) R.wake = await navigator.wakeLock.request('screen'); } catch(e){}
+}
+
+/* ---- AI recognition ---- */
+function setModel(s){
+  R.modelState = s;
+  $('radModel').textContent = {
+    loading:'AI recognition loading (about 5 MB, first time only)…',
+    ready:'AI recognition ready: people, animals and vehicles.',
+    failed:'AI recognition couldn’t load, so only plain motion is shown.'
+  }[s] || '';
+}
+async function loadModel(){
+  setModel('loading');
+  try {
+    if (!window.tf) await loadScript(TF_URL);
+    if (!window.cocoSsd) await loadScript(COCO_URL);
+    R.model = await cocoSsd.load({ base:'lite_mobilenet_v2' });
+    setModel('ready');
+    detLoop();
+  } catch(e){ setModel('failed'); }
+}
+async function detLoop(){
+  const cams = R.active.filter(c => R.videos[c].readyState >= 2);
+  if (cams.length && !R.settings.paused && !R.switching){
+    R.detIdx = (R.detIdx + 1) % cams.length;
+    const cam = cams[R.detIdx], v = R.videos[cam];
+    try {
+      const preds = await R.model.detect(v, 8, 0.45);
+      const sx = W / v.videoWidth, sy = H / v.videoHeight;
+      R.dets[cam] = preds.map(p => {
+        const type = classify(p.class); if (!type) return null;
+        const [x, y, w, h] = p.bbox;
+        return { type, label:p.class, score:p.score, box:[x*sx, y*sy, (x+w)*sx, (y+h)*sy] };
+      }).filter(Boolean);
+      R.detTime[cam] = performance.now();
+    } catch(e){}
+  }
+  setTimeout(detLoop, 120);
+}
+
+/* ---- motion analysis ---- */
+const proc = document.createElement('canvas'); proc.width = W; proc.height = H;
+const pctx = proc.getContext('2d', { willReadFrequently:true });
+const gray = new Float32Array(W*H), mask = new Uint8Array(W*H), mask2 = new Uint8Array(W*H), seen = new Uint8Array(W*H), stack = new Int32Array(W*H);
+function analyze(v, st){
+  pctx.drawImage(v, 0, 0, W, H);
+  const d = pctx.getImageData(0, 0, W, H).data;
+  for (let i = 0, j = 0; i < W*H; i++, j += 4) gray[i] = d[j]*0.299 + d[j+1]*0.587 + d[j+2]*0.114;
+  if (!st.bg || st.warm < 4){ st.warm++; st.bg = Float32Array.from(gray); return []; }
+  const sens = R.settings.sens, thr = 10 + (1 - sens) * 38;
+  let moving = 0;
+  for (let i = 0; i < W*H; i++){
+    const m = Math.abs(gray[i] - st.bg[i]) > thr ? 1 : 0;
+    mask[i] = m; moving += m;
+    st.bg[i] += (gray[i] - st.bg[i]) * (m ? 0.03 : 0.12);
+  }
+  if (moving / (W*H) > 0.35){ st.bg.set(gray); st.shaky = true; return []; }
+  st.shaky = false;
+  mask2.fill(0);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++){
+    if (!mask[y*W + x]) continue;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++){
+      const nx = x + dx, ny = y + dy;
+      if (nx >= 0 && ny >= 0 && nx < W && ny < H) mask2[ny*W + nx] = 1;
+    }
+  }
+  seen.fill(0);
+  const blobs = [], minArea = 8 + (1 - sens) * 22;
+  for (let s0 = 0; s0 < W*H; s0++){
+    if (!mask2[s0] || seen[s0]) continue;
+    let sp = 0, area = 0, minx = W, maxx = 0, miny = H, maxy = 0;
+    stack[sp++] = s0; seen[s0] = 1;
+    while (sp){
+      const p = stack[--sp], x = p % W, y = (p / W) | 0;
+      area++;
+      if (x < minx) minx = x; if (x > maxx) maxx = x; if (y < miny) miny = y; if (y > maxy) maxy = y;
+      if (x > 0 && mask2[p-1] && !seen[p-1]){ seen[p-1] = 1; stack[sp++] = p-1; }
+      if (x < W-1 && mask2[p+1] && !seen[p+1]){ seen[p+1] = 1; stack[sp++] = p+1; }
+      if (y > 0 && mask2[p-W] && !seen[p-W]){ seen[p-W] = 1; stack[sp++] = p-W; }
+      if (y < H-1 && mask2[p+W] && !seen[p+W]){ seen[p+W] = 1; stack[sp++] = p+W; }
+    }
+    if (area >= minArea) blobs.push({ area, box:[minx, miny, maxx, maxy] });
+  }
+  blobs.sort((a, b) => b.area - a.area);
+  return blobs.slice(0, 6);
+}
+const boxArea = b => (b[2] - b[0] + 1) * (b[3] - b[1] + 1);
+function overlap(a, b){
+  const ix = Math.max(0, Math.min(a[2], b[2]) - Math.max(a[0], b[0]));
+  const iy = Math.max(0, Math.min(a[3], b[3]) - Math.max(a[1], b[1]));
+  return ix * iy;
+}
+function mkObs(cam, box, type, label, moving){
+  const [x0, y0, x1, y1] = box;
+  const nx = clamp(((x0 + x1) / 2 + 0.5) / W, 0, 1);
+  const frac = clamp(((x1 - x0 + 1) * (y1 - y0 + 1)) / (W*H), 0, 1);
+  const range = clamp(1 - Math.sqrt(frac) * 1.6, 0.08, 0.95);
+  const fov = R.fov[cam];
+  // rear camera looks ahead (0°); front camera looks behind (180°). Raw front frames are not mirrored,
+  // so the image's left edge is the phone's right-hand side when looking back.
+  const bearing = cam === 'rear' ? (nx - 0.5) * fov : 180 + (nx - 0.5) * fov;
+  return { cam, bearing, range, size:frac, type, label, moving };
+}
+function observe(cam, t){
+  const blobs = R.cam[cam].blobs;
+  const dets = t - R.detTime[cam] < 1000 ? R.dets[cam] : [];
+  const obs = [], usedBlob = new Set();
+  for (const d of dets){
+    let moving = false;
+    blobs.forEach((b, i) => { if (overlap(b.box, d.box) > 0.25 * boxArea(b.box)){ moving = true; usedBlob.add(i); } });
+    if (R.settings.movingOnly && !moving) continue;
+    obs.push(mkObs(cam, d.box, d.type, d.label, moving));
+  }
+  blobs.forEach((b, i) => { if (!usedBlob.has(i)) obs.push(mkObs(cam, b.box, 'motion', 'motion', true)); });
+  return obs;
+}
+function track(obsAll, t){
+  const used = new Set();
+  obsAll.sort((a, b) => (a.type === 'motion') - (b.type === 'motion'));
+  for (const o of obsAll){
+    let best = null, bd = Infinity;
+    for (const c of R.contacts){
+      if (used.has(c) || c.cam !== o.cam) continue;
+      let d = Math.abs(angNorm(c.bearing - o.bearing)) / 12 + Math.abs(c.range - o.range) / 0.3;
+      if (c.type !== 'motion' && o.type !== 'motion' && c.type !== o.type) d += 1;
+      if (d < bd){ bd = d; best = c; }
+    }
+    if (best && bd < 1.5){
+      best.bearing += angNorm(o.bearing - best.bearing) * 0.5;
+      const nr = best.range + (o.range - best.range) * 0.4;
+      best.trend = best.trend * 0.8 + (nr - best.range) * 0.2;
+      best.range = nr; best.size = o.size; best.seen = t;
+      if (o.type !== 'motion'){ best.type = o.type; best.label = o.label; }
+      if (o.moving) best.lastMove = t;
+      used.add(best);
+    } else {
+      const c = { id:++R.nextId, cam:o.cam, bearing:o.bearing, range:o.range, size:o.size, type:o.type, label:o.label,
+                  trend:0, seen:t, lastMove:o.moving ? t : -1e9 };
+      R.contacts.push(c); used.add(c);
+    }
+  }
+  R.contacts = R.contacts.filter(c => t - c.seen < (R.active.includes(c.cam) ? 1200 : 6000));
+}
+function drawTile(cam){
+  const v = R.videos[cam], cv = $(cam === 'rear' ? 'oRear' : 'oFront');
+  const cw = 160, ch = Math.round(160 * (v.videoHeight || 3) / (v.videoWidth || 4));
+  if (cv.width !== cw || cv.height !== ch){ cv.width = cw; cv.height = ch; }
+  const g = cv.getContext('2d'), sx = cw / W, sy = ch / H;
+  g.clearRect(0, 0, cw, ch); g.lineWidth = 2;
+  g.setLineDash([3, 3]); g.strokeStyle = 'rgba(201,214,211,.8)';
+  for (const b of R.cam[cam].blobs){ const [x0,y0,x1,y1] = b.box; g.strokeRect(x0*sx, y0*sy, (x1-x0+1)*sx, (y1-y0+1)*sy); }
+  g.setLineDash([]); g.font = '600 11px system-ui, sans-serif';
+  const dets = performance.now() - R.detTime[cam] < 1000 ? R.dets[cam] : [];
+  for (const d of dets){
+    const [x0,y0,x1,y1] = d.box; g.strokeStyle = g.fillStyle = COLORS[d.type];
+    g.strokeRect(x0*sx, y0*sy, (x1-x0)*sx, (y1-y0)*sy);
+    g.fillText(cap(d.label), x0*sx + 3, Math.max(11, y0*sy - 3));
+  }
+}
+const snapCanvas = document.createElement('canvas');
+function tick(){
+  const t = performance.now();
+  if (!R.settings.paused && !R.switching){
+    const obs = [];
+    for (const cam of R.active){
+      const v = R.videos[cam];
+      if (v.readyState < 2 || !v.videoWidth) continue;
+      R.fov[cam] = v.videoHeight > v.videoWidth ? 50 : 66;   // portrait frames see a narrower slice
+      R.cam[cam].blobs = analyze(v, R.cam[cam]);
+      obs.push(...observe(cam, t));
+      drawTile(cam);
+    }
+    track(obs, t);
+  }
+  if (t - R.lastSend >= 100){
+    R.lastSend = t;
+    broadcast({ t:'frame', status:statusObj(), contacts:R.contacts.map(c => ({
+      id:c.id, cam:c.cam, b:+c.bearing.toFixed(1), r:+c.range.toFixed(3), s:+c.size.toFixed(4),
+      type:c.type, label:c.label, moving:t - c.lastMove < 1500, trend:+c.trend.toFixed(4),
+      live:R.active.includes(c.cam)
+    })) });
+    $('radCount').textContent = R.contacts.length ? `${R.contacts.length} contact${R.contacts.length > 1 ? 's' : ''} tracked` : 'Nothing moving';
+  }
+  if (R.settings.peek && R.conns.length && t - R.lastSnap > 1500){
+    R.lastSnap = t;
+    for (const cam of R.active){
+      const v = R.videos[cam]; if (!v.videoWidth) continue;
+      const w = 200, h = Math.round(200 * v.videoHeight / v.videoWidth);
+      snapCanvas.width = w; snapCanvas.height = h;
+      snapCanvas.getContext('2d').drawImage(v, 0, 0, w, h);
+      broadcast({ t:'snap', cam, data:snapCanvas.toDataURL('image/jpeg', 0.55) });
+    }
+  }
+}
+
+/* =====================================================================
+   SCREEN PHONE
+   ===================================================================== */
+const S = {
+  peer:null, conn:null, code:null, linked:false, everLinked:false, retry:null,
+  contacts:[], blips:[], sweep:0, status:null, lastFrame:0,
+  logged:new Set(), firstSeen:new Map(),
+  settings:{ sens:0.55, movingOnly:true, cams:'both', peek:false, paused:false },
+  soundOn:false, audio:null, bannerTimer:null, cw:0, ch:0, dpr:1, lastT:0
+};
+function initScreen(code){
+  show('screenView');
+  $('codeIn').value = code || store.get('camradar-last') || '';
+  $('joinBtn').onclick = () => {
+    const c = $('codeIn').value.replace(/\D/g, '');
+    if (c.length !== 6){ $('joinErr').textContent = 'Enter the 6-digit code shown on the radar phone.'; return; }
+    connectScreen(c);
+  };
+  $('codeIn').addEventListener('keydown', e => { if (e.key === 'Enter') $('joinBtn').click(); });
+  $('changeCode').onclick = () => { $('joinPanel').hidden = false; $('codeIn').focus(); };
+  document.querySelectorAll('[data-cams]').forEach(b => b.onclick = () => {
+    S.settings.cams = b.dataset.cams;
+    document.querySelectorAll('[data-cams]').forEach(x => x.setAttribute('aria-pressed', x === b));
+    sendSettings();
+  });
+  toggle('tgMoving', v => { S.settings.movingOnly = v; sendSettings(); });
+  toggle('tgPeek', v => { S.settings.peek = v; $('peeks').hidden = !v; sendSettings(); });
+  toggle('tgPause', v => { S.settings.paused = v; $('tgPause').textContent = v ? 'Resume' : 'Pause'; sendSettings(); });
+  toggle('tgSound', v => {
+    S.soundOn = v;
+    if (v){ S.audio = S.audio || new (window.AudioContext || window.webkitAudioContext)(); S.audio.resume(); }
+  });
+  $('sensIn').addEventListener('change', e => { S.settings.sens = parseFloat(e.target.value); sendSettings(); });
+  new ResizeObserver(resizeScope).observe($('wrap'));
+  setInterval(updateLists, 300);
+  requestAnimationFrame(screenLoop);
+  if (code) connectScreen(code);
+}
+function toggle(id, fn){
+  $(id).onclick = () => { const v = $(id).getAttribute('aria-pressed') !== 'true'; $(id).setAttribute('aria-pressed', v); fn(v); };
+}
+function setScr(t){ $('scrStatus').textContent = t; }
+function sendSettings(){ if (S.conn && S.conn.open) try { S.conn.send({ t:'settings', ...S.settings }); } catch(e){} }
+function connectScreen(code){
+  if (typeof Peer === 'undefined'){ $('joinErr').textContent = 'Pairing library didn’t load. Check the connection, then reload.'; return; }
+  S.code = code; store.set('camradar-last', code);
+  $('joinErr').textContent = ''; setScr('Connecting…');
+  if (!S.peer || S.peer.destroyed){
+    S.peer = new Peer({ debug:0 });
+    S.peer.on('open', openConn);
+    S.peer.on('disconnected', () => { if (!S.peer.destroyed) try { S.peer.reconnect(); } catch(e){} });
+    S.peer.on('error', e => {
+      if (e.type === 'peer-unavailable'){
+        S.linked = false; setScr('Not linked');
+        $('joinPanel').hidden = false;
+        $('joinErr').textContent = `No radar phone is using code ${fmtCode(S.code)} right now. Check the code on the radar phone and that its page is open.`;
+        if (S.everLinked) scheduleRetry();
+      } else if (['network','server-error','socket-error','socket-closed'].includes(e.type)){
+        setScr('Can’t reach the pairing server');
+        $('joinErr').textContent = 'Check that this phone is on the radar phone’s hotspot and that the hotspot has mobile data.';
+        scheduleRetry();
+      }
+    });
+  } else if (S.peer.open) openConn();
+}
+function openConn(){
+  if (S.conn){ try { S.conn.close(); } catch(e){} }
+  const conn = S.peer.connect(PREFIX + S.code, { reliable:true });
+  S.conn = conn;
+  conn.on('open', () => {
+    S.linked = true; S.everLinked = true; S.lastFrame = performance.now();
+    $('joinPanel').hidden = true; $('joinErr').textContent = '';
+    setScr('Linked'); sendSettings();
+  });
+  conn.on('data', onRadarMsg);
+  conn.on('close', () => { if (S.conn !== conn) return; S.linked = false; setScr('Link lost, reconnecting…'); scheduleRetry(); });
+  conn.on('error', () => {});
+}
+function scheduleRetry(){
+  clearTimeout(S.retry);
+  S.retry = setTimeout(() => {
+    if (S.linked) return;
+    if (S.peer && S.peer.open) openConn(); else connectScreen(S.code);
+  }, 3000);
+}
+function onRadarMsg(m){
+  if (!m) return;
+  if (m.t === 'hello' || m.t === 'frame'){ S.status = m.status; S.lastFrame = performance.now(); }
+  if (m.t === 'frame'){
+    S.contacts = m.contacts || [];
+    const now = performance.now();
+    const ids = new Set();
+    for (const c of S.contacts){
+      ids.add(c.id);
+      if (!S.firstSeen.has(c.id)) S.firstSeen.set(c.id, now);
+      if (!c.moving) continue;
+      const key = c.id + ':' + c.type;
+      if (S.logged.has(key)) continue;
+      if (c.type === 'motion'){
+        if (now - S.firstSeen.get(c.id) < 1200 || S.logged.has(c.id + ':labeled')) continue;
+      } else S.logged.add(c.id + ':labeled');
+      S.logged.add(key); addEvent(c);
+    }
+    for (const id of S.firstSeen.keys()) if (!ids.has(id) && now - S.firstSeen.get(id) > 60000) S.firstSeen.delete(id);
+  }
+  if (m.t === 'snap'){ const img = $(m.cam === 'rear' ? 'peekRear' : 'peekFront'); img.src = m.data; }
+}
+function addEvent(c){
+  const name = nameOf(c), where = dirText(c.b);
+  const when = new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  const log = $('log');
+  if (log.firstElementChild && log.firstElementChild.classList.contains('muted')) log.innerHTML = '';
+  const li = document.createElement('li');
+  li.innerHTML = `<span class="dot" style="--c:${COLORS[c.type]}"></span><strong></strong><span></span><time>${when}</time>`;
+  li.children[1].textContent = name;
+  li.children[2].textContent = `${where}, ${rangeText(c.r)}`;
+  log.prepend(li);
+  while (log.children.length > 40) log.lastElementChild.remove();
+  const ban = $('banner');
+  ban.textContent = `${name}: ${where}`; ban.style.setProperty('--c', COLORS[c.type]);
+  ban.classList.add('show'); clearTimeout(S.bannerTimer);
+  S.bannerTimer = setTimeout(() => ban.classList.remove('show'), 2500);
+  alertSound(c.type);
+  if (c.type !== 'motion' && navigator.vibrate) navigator.vibrate([80, 60, 80]);
+}
+function tone(freq, start, dur, vol){
+  const a = S.audio, o = a.createOscillator(), g = a.createGain();
+  o.frequency.value = freq; o.type = 'sine';
+  g.gain.setValueAtTime(0.0001, a.currentTime + start);
+  g.gain.exponentialRampToValueAtTime(vol, a.currentTime + start + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, a.currentTime + start + dur);
+  o.connect(g).connect(a.destination); o.start(a.currentTime + start); o.stop(a.currentTime + start + dur + 0.05);
+}
+function alertSound(type){
+  if (!S.soundOn || !S.audio) return;
+  try {
+    const seq = { person:[[880,0],[660,.16]], animal:[[520,0],[780,.16]], vehicle:[[392,0],[392,.18]], motion:[[700,0]] }[type];
+    seq.forEach(([f, s]) => tone(f, s, 0.14, type === 'motion' ? 0.08 : 0.2));
+  } catch(e){}
+}
+function blipPing(r){
+  if (!S.soundOn || !S.audio) return;
+  try { tone(600 + (1 - r) * 900, 0, 0.12, 0.05); } catch(e){}
+}
+function updateLists(){
+  $('count').textContent = S.contacts.length;
+  const ul = $('contactList');
+  if (!S.contacts.length){ ul.innerHTML = '<li class="muted">Nothing detected</li>'; return; }
+  ul.innerHTML = '';
+  [...S.contacts].sort((a, b) => a.r - b.r).slice(0, 6).forEach(c => {
+    const li = document.createElement('li');
+    const trend = c.trend < -0.004 ? 'coming closer' : c.trend > 0.004 ? 'moving away' : (c.moving ? 'moving' : 'still');
+    li.innerHTML = `<span class="dot" style="--c:${COLORS[c.type]}"></span><strong></strong><span></span><time></time>`;
+    li.children[1].textContent = nameOf(c);
+    li.children[2].textContent = `${dirText(c.b)}, ${rangeText(c.r)}`;
+    li.children[3].textContent = trend;
+    ul.appendChild(li);
+  });
+}
+function statusLine(){
+  if (!S.linked) return null;
+  const st = S.status, now = performance.now();
+  if (now - S.lastFrame > 3000) return 'No data. Keep the radar phone’s screen on and its page open.';
+  if (!st || !st.started) return 'Linked. Tap Start cameras on the radar phone.';
+  if (st.paused) return 'Paused';
+  if (st.shaky && (st.shaky.rear || st.shaky.front)) return 'Radar phone is moving. Hold it still.';
+  const m = { dual:'Linked, both cameras live', alternate:'Linked, cameras taking turns', single:'Linked, one camera live', none:'Linked, cameras off' }[st.mode] || 'Linked';
+  return m + (st.model === 'loading' ? ', AI loading' : st.model === 'failed' ? ', motion only' : '');
+}
+
+/* ---- scope drawing ---- */
+function resizeScope(){
+  const r = $('scope').getBoundingClientRect();
+  S.dpr = Math.min(2, window.devicePixelRatio || 1);
+  S.cw = r.width; S.ch = r.height;
+  $('scope').width = Math.round(S.cw * S.dpr); $('scope').height = Math.round(S.ch * S.dpr);
+}
+function screenLoop(t){
+  const dt = Math.min(0.1, (t - (S.lastT || t)) / 1000); S.lastT = t;
+  const line = statusLine(); if (line) setScr(line);
+  if (S.linked && t - S.lastFrame > 5000) S.contacts = [];
+  // sweep: full turn every 3 seconds; a blip lights when the beam passes it
+  const prev = S.sweep, step = 120 * dt;
+  S.sweep = (S.sweep + step) % 360;
+  for (const c of S.contacts){
+    const d = ((c.b - prev) % 360 + 360) % 360;
+    if (d <= step + 0.5){
+      S.blips = S.blips.filter(b => b.id !== c.id);
+      S.blips.push({ id:c.id, b:c.b, r:c.r, s:c.s, type:c.type, label:c.label, moving:c.moving, glow:1 });
+      blipPing(c.r);
+    }
+  }
+  for (const b of S.blips) b.glow -= dt * 0.33;
+  S.blips = S.blips.filter(b => b.glow > 0);
+  if (S.cw) drawScope();
+  requestAnimationFrame(screenLoop);
+}
+function drawScope(){
+  const ctx = $('scope').getContext('2d');
+  const { cw, ch, dpr } = S;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cw, ch);
+  const cx = cw / 2, cy = ch / 2, R0 = Math.min(cw, ch) / 2 - 28;
+  const pt = (b, r) => [cx + Math.sin(rad(b)) * r * R0, cy - Math.cos(rad(b)) * r * R0];
+  const wedge = (from, to, r) => { ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, r, rad(from - 90), rad(to - 90)); ctx.closePath(); };
+
+  // disc (blind area)
+  ctx.beginPath(); ctx.arc(cx, cy, R0, 0, Math.PI * 2); ctx.fillStyle = '#081619'; ctx.fill();
+
+  // camera coverage
+  const st = S.status, live = (st && st.active) || [];
+  for (const cam of ['rear','front']){
+    const shown = st && (live.includes(cam) || (st.mode === 'alternate' && S.settings.cams === 'both'));
+    if (!shown) continue;
+    const c0 = cam === 'rear' ? 0 : 180, half = ((st.fov && st.fov[cam]) || 66) / 2;
+    wedge(c0 - half, c0 + half, R0);
+    ctx.fillStyle = live.includes(cam) ? '#123539' : '#0d2629'; ctx.fill();
+    ctx.setLineDash(live.includes(cam) ? [] : [5, 5]);
+    ctx.strokeStyle = '#2f6662'; ctx.lineWidth = 1; ctx.stroke(); ctx.setLineDash([]);
+  }
+
+  // sweep afterglow
+  for (let i = 0; i < 28; i++){
+    wedge(S.sweep - i - 1, S.sweep - i, R0);
+    ctx.fillStyle = `rgba(255,181,71,${0.11 * (1 - i / 28)})`; ctx.fill();
+  }
+
+  // grid
+  ctx.strokeStyle = '#24484a'; ctx.lineWidth = 1;
+  for (const r of [1/3, 2/3, 1]){ ctx.beginPath(); ctx.arc(cx, cy, r * R0, 0, Math.PI * 2); ctx.stroke(); }
+  for (let b = 0; b < 360; b += 45){ const [x, y] = pt(b, 1); ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(x, y); ctx.stroke(); }
+  ctx.fillStyle = '#6f9d98'; ctx.font = '600 12px "Saira Semi Condensed", system-ui, sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  [['Ahead',0],['Right',90],['Behind',180],['Left',270]].forEach(([t, b]) => { const [x, y] = pt(b, 1.09); ctx.fillText(t, x, y); });
+  ctx.fillStyle = '#4c7a76';
+  [['near',1/3],['mid',2/3],['far',1]].forEach(([t, r]) => { const [x, y] = pt(135, r); ctx.fillText(t, x + 12, y - 6); });
+
+  // beam
+  const [bx, by] = pt(S.sweep, 1);
+  ctx.strokeStyle = 'rgba(255,200,120,.9)'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(bx, by); ctx.stroke();
+
+  // blips
+  for (const b of S.blips){
+    const [x, y] = pt(b.b, b.r), col = COLORS[b.type];
+    const size = 6 + Math.min(20, Math.sqrt(b.s) * 60);
+    ctx.globalAlpha = Math.max(0, b.glow);
+    const grd = ctx.createRadialGradient(x, y, 0, x, y, size * 1.8);
+    grd.addColorStop(0, '#ffffff'); grd.addColorStop(0.3, col); grd.addColorStop(1, 'rgba(0,0,0,0)');
+    if (b.moving){ ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(x, y, size * 1.8, 0, Math.PI * 2); ctx.fill(); }
+    else { ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, size * 0.7, 0, Math.PI * 2); ctx.stroke(); }
+    ctx.fillStyle = col; ctx.font = '600 12px "Saira Semi Condensed", system-ui, sans-serif';
+    ctx.fillText(b.type === 'motion' ? 'Motion' : cap(b.label), x, y - size - 8);
+    ctx.globalAlpha = 1;
+  }
+
+  // the radar phone in the middle (top edge = rear camera side, facing "Ahead")
+  ctx.fillStyle = '#ffb547';
+  ctx.beginPath(); ctx.roundRect ? ctx.roundRect(cx - 6, cy - 10, 12, 20, 3) : ctx.rect(cx - 6, cy - 10, 12, 20); ctx.fill();
+  ctx.fillStyle = '#081619'; ctx.fillRect(cx - 3, cy - 8, 6, 2);
+}
+
+/* ---- routing ---- */
+const h = location.hash;
+if (h.startsWith('#screen')){ const m = h.match(/screen=(\d{6})/); initScreen(m ? m[1] : null); }
+else if (h === '#radar') initRadar();
+else show('pick');
+$('pickRadar').onclick = () => { history.replaceState(null, '', '#radar'); initRadar(); };
+$('pickScreen').onclick = () => { history.replaceState(null, '', '#screen'); initScreen(null); };
+})();
+</script>
+</body>
+</html>
